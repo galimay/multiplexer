@@ -1,0 +1,24 @@
+[project]
+name = "multiplexer"
+version = "0.1.0"
+description = "Python Terminal Multiplexer Library"
+authors = [
+    {name = "galimay", email = "galimay@hotmail.com"},
+]
+dependencies = ["rich>=14.3.0", "blessed>=1.27.0", "click>=8.3.1", "subprocess32>=3.5.4"]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
