@@ -9,7 +9,7 @@ class Pane:
     Represents a single pane running a command.
     """
 
-    def __init__(self, command: str, terminal: Terminal, x: int = 0, y: int = 0, width: int = 80, height: int = 24):
+    def __init__(self, command: str, terminal: Terminal, x: int = 0, y: int = 0, width: int = 80, height: int = 24, box=None, color=None):
         self.command = command
         self.terminal = terminal
         self.x = x
@@ -20,6 +20,8 @@ class Pane:
         self.output: List[str] = []
         self.thread: Optional[threading.Thread] = None
         self.running = False
+        self.box = box
+        self.color = color
 
     def start(self) -> None:
         """
@@ -63,6 +65,11 @@ class Pane:
                 if len(self.output) > self.height - 2:  # Leave space for border
                     self.output.pop(0)
 
+    def colorize(self, text):
+        if self.color:
+            return self.color(text)
+        return text
+
     def render(self) -> str:
         """
         Render the pane's content.
@@ -70,49 +77,32 @@ class Pane:
         Returns:
             The rendered string for this pane.
         """
-        # Prefer a colorful, block-style border using terminal background if available.
-        use_color = all(hasattr(self.terminal, attr) for attr in ("move", "on_blue", "normal"))
         content = []
-
+        
         # Prepare title (command) line
         title = f" {self.command} "[: max(0, self.width - 2)]
         title = title.center(max(0, self.width - 2))
 
-        if use_color:
-            # Draw top border with title
-            top = self.terminal.on_blue + ' ' * (self.width) + self.terminal.normal
-            content.append(self.terminal.move(self.y, self.x) + top)
-            # Draw title on second line with contrasting color
-            title_line = self.terminal.move(self.y + 1, self.x)
-            title_line += self.terminal.on_blue + self.terminal.bold + self.terminal.white + ' ' + title[:self.width-2].ljust(self.width-2) + ' ' + self.terminal.normal
-            content.append(title_line)
-
-            # Content area
-            for i in range(2, self.height):
-                line = self.terminal.move(self.y + i, self.x)
-                if i - 2 < len(self.output):
-                    line_content = self.output[i - 2][:self.width]
-                    # pad/truncate to width
-                    line += self.terminal.on_blue + line_content.ljust(self.width) + self.terminal.normal
-                else:
-                    line += self.terminal.move_xy(0, 0) + self.terminal.on_blue + ' ' * (self.width) + self.terminal.normal
-                content.append(line)
-        else:
-            # Fallback to ASCII style for environments without color (eg. unit tests)
-            border = '+' + '-' * (self.width - 2) + '+'
-            content.append(self.terminal.move(self.y, self.x) + border)
-            # Title row inside border
-            title_row = '|' + title.ljust(self.width - 2) + '|'
-            content.append(self.terminal.move(self.y + 1, self.x) + title_row)
-            for i in range(2, self.height - 1):
-                line = '|'
+        # Draw top border with title
+        top = self.colorize(self.box.top_left + self.box.horizontal * (self.width - 2) + self.box.top_right)
+        content.append(self.terminal.move(self.y, self.x) + top)
+        
+        # Draw content area
+        for i in range(1, self.height - 1):
+            line = self.terminal.move(self.y + i, self.x)
+            if i == 1:
+                line_content = title
+                line += self.colorize(self.box.vertical) + line_content + self.colorize(self.box.vertical)
+            else:
                 if i - 2 < len(self.output):
                     line_content = self.output[i - 2][:self.width - 2]
-                    line += line_content.ljust(self.width - 2)
+                    line += self.colorize(self.box.vertical) + line_content.ljust(self.width - 2) + self.colorize(self.box.vertical)
                 else:
-                    line += ' ' * (self.width - 2)
-                line += '|'
-                content.append(self.terminal.move(self.y + i, self.x) + line)
-            content.append(self.terminal.move(self.y + self.height - 1, self.x) + border)
+                    line += self.colorize(self.box.vertical) + ' ' * (self.width - 2) + self.colorize(self.box.vertical)
+            content.append(line)
+        
+        # Draw bottom border
+        bottom = self.colorize(self.box.bottom_left + self.box.horizontal * (self.width - 2) + self.box.bottom_right)
+        content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)
 
         return '\n'.join(content)

@@ -5,7 +5,7 @@ Example usage of the Terminal Multiplexer.
 This script demonstrates how to run multiple commands in panes.
 """
 
-from multiplexer import TerminalMultiplexer
+from multiplexer import TerminalMultiplexer, styles
 import time
 import signal
 import sys
@@ -19,6 +19,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     mux = TerminalMultiplexer()
+    mux.box_style = styles.double
 
     # Add some example commands
     mux.run_command('ping -t localhost')  # Continuous ping

@@ -6,5 +6,6 @@ automatically managing layout and space optimization.
 """
 
 from .multiplexer import TerminalMultiplexer
+from . import styles
 
-__all__ = ['TerminalMultiplexer']
+__all__ = ['TerminalMultiplexer', 'styles']

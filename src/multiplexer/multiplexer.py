@@ -2,8 +2,10 @@ import threading
 import time
 from typing import List, Optional
 from blessed import Terminal
+from itertools import cycle
 from .pane import Pane
 from .layout import LayoutManager
+from . import styles
 
 
 class TerminalMultiplexer:
@@ -22,6 +24,14 @@ class TerminalMultiplexer:
         # track terminal size to detect resize events
         self._prev_width = getattr(self.terminal, 'width', 0)
         self._prev_height = getattr(self.terminal, 'height', 0)
+        self.box_style = styles.rounded
+        self.color_cycle = cycle([
+            self.terminal.red,
+            self.terminal.green,
+            self.terminal.blue,
+            self.terminal.magenta,
+            self.terminal.cyan,
+        ])
 
     def run_command(self, command: str) -> None:
         """
@@ -30,7 +40,12 @@ class TerminalMultiplexer:
         Args:
             command: The command to run.
         """
-        pane = Pane(command, self.terminal)
+        pane = Pane(
+            command,
+            self.terminal,
+            box=self.box_style,
+            color=next(self.color_cycle),
+        )
         self.panes.append(pane)
         self.layout_manager.update_layout(self.panes)
 
