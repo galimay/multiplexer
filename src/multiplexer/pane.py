@@ -70,18 +70,49 @@ class Pane:
         Returns:
             The rendered string for this pane.
         """
-        # Draw border
-        border = '+' + '-' * (self.width - 2) + '+'
+        # Prefer a colorful, block-style border using terminal background if available.
+        use_color = all(hasattr(self.terminal, attr) for attr in ("move", "on_blue", "normal"))
         content = []
-        content.append(self.terminal.move(self.y, self.x) + border)
-        for i in range(1, self.height - 1):
-            line = '|'
-            if i - 1 < len(self.output):
-                line_content = self.output[i - 1][:self.width - 2]
-                line += line_content.ljust(self.width - 2)
-            else:
-                line += ' ' * (self.width - 2)
-            line += '|'
-            content.append(self.terminal.move(self.y + i, self.x) + line)
-        content.append(self.terminal.move(self.y + self.height - 1, self.x) + border)
+
+        # Prepare title (command) line
+        title = f" {self.command} "[: max(0, self.width - 2)]
+        title = title.center(max(0, self.width - 2))
+
+        if use_color:
+            # Draw top border with title
+            top = self.terminal.on_blue + ' ' * (self.width) + self.terminal.normal
+            content.append(self.terminal.move(self.y, self.x) + top)
+            # Draw title on second line with contrasting color
+            title_line = self.terminal.move(self.y + 1, self.x)
+            title_line += self.terminal.on_blue + self.terminal.bold + self.terminal.white + ' ' + title[:self.width-2].ljust(self.width-2) + ' ' + self.terminal.normal
+            content.append(title_line)
+
+            # Content area
+            for i in range(2, self.height):
+                line = self.terminal.move(self.y + i, self.x)
+                if i - 2 < len(self.output):
+                    line_content = self.output[i - 2][:self.width]
+                    # pad/truncate to width
+                    line += self.terminal.on_blue + line_content.ljust(self.width) + self.terminal.normal
+                else:
+                    line += self.terminal.move_xy(0, 0) + self.terminal.on_blue + ' ' * (self.width) + self.terminal.normal
+                content.append(line)
+        else:
+            # Fallback to ASCII style for environments without color (eg. unit tests)
+            border = '+' + '-' * (self.width - 2) + '+'
+            content.append(self.terminal.move(self.y, self.x) + border)
+            # Title row inside border
+            title_row = '|' + title.ljust(self.width - 2) + '|'
+            content.append(self.terminal.move(self.y + 1, self.x) + title_row)
+            for i in range(2, self.height - 1):
+                line = '|'
+                if i - 2 < len(self.output):
+                    line_content = self.output[i - 2][:self.width - 2]
+                    line += line_content.ljust(self.width - 2)
+                else:
+                    line += ' ' * (self.width - 2)
+                line += '|'
+                content.append(self.terminal.move(self.y + i, self.x) + line)
+            content.append(self.terminal.move(self.y + self.height - 1, self.x) + border)
+
         return '\n'.join(content)

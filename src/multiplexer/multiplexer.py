@@ -19,6 +19,9 @@ class TerminalMultiplexer:
         self.layout_manager = LayoutManager(self.terminal)
         self.running = False
         self.thread: Optional[threading.Thread] = None
+        # track terminal size to detect resize events
+        self._prev_width = getattr(self.terminal, 'width', 0)
+        self._prev_height = getattr(self.terminal, 'height', 0)
 
     def run_command(self, command: str) -> None:
         """
@@ -57,6 +60,15 @@ class TerminalMultiplexer:
         """
         with self.terminal.fullscreen(), self.terminal.cbreak():
             while self.running:
+                # detect terminal resize and update layout if changed
+                width = getattr(self.terminal, 'width', self._prev_width)
+                height = getattr(self.terminal, 'height', self._prev_height)
+                if width != self._prev_width or height != self._prev_height:
+                    self._prev_width, self._prev_height = width, height
+                    self.layout_manager.update_layout(self.panes)
+
+                # ensure layout is up-to-date every frame (safe and cheap)
+                self.layout_manager.update_layout(self.panes)
                 self._render()
                 time.sleep(0.1)  # Refresh rate
 
@@ -64,7 +76,9 @@ class TerminalMultiplexer:
         """
         Render all panes to the terminal.
         """
+        # Clear screen and render panes
         output = self.terminal.clear()
         for pane in self.panes:
             output += pane.render()
+        # Use print so that terminal control sequences are respected
         print(output, end='')

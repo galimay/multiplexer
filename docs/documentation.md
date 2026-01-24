@@ -66,6 +66,19 @@ The multiplexer supports different layouts based on the number of panes:
 ## Examples
 See the `examples/` directory for more detailed examples.
 
+## Output Example
+Here is a simplified example of what the multiplexer displays (titles show the command run in each pane):
+
+```
++------------------------------+  +------------------------------+
+|        ls -la                |  |        top                   |
+| file1  file2  dir/ ...       |  | PID  USER   %CPU %MEM  CMD    |
+| ...                          |  | 1234 alice  1.2  0.8  python |
++------------------------------+  +------------------------------+
+```
+
+When running in a capable terminal the panes use colored headers and subtle background borders instead of ASCII characters for a more polished look.
+
 ## Troubleshooting
 - Ensure your terminal supports the required capabilities.
 - Commands that require interactive input may not work properly in panes.
