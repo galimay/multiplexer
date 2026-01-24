@@ -8,8 +8,9 @@ class LayoutManager:
     Manages the layout of panes in the terminal.
     """
 
-    def __init__(self, terminal: Terminal):
+    def __init__(self, terminal: Terminal, status_bar_height: int = 1):
         self.terminal = terminal
+        self.status_bar_height = status_bar_height
 
     def update_layout(self, panes: List[Pane]) -> None:
         """
@@ -21,7 +22,7 @@ class LayoutManager:
         if not panes:
             return
 
-        term_width, term_height = self.terminal.width, self.terminal.height
+        term_width, term_height = self.terminal.width, self.terminal.height - self.status_bar_height
 
         num_panes = len(panes)
 

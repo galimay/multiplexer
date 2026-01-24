@@ -32,6 +32,10 @@ class TerminalMultiplexer:
             self.terminal.magenta,
             self.terminal.cyan,
         ])
+        self.total_panes_created = 0
+        self.last_finished_command = None
+        self.last_exit_code = None
+        self.selected_pane_index = 0
 
     def run_command(self, command: str) -> None:
         """
@@ -47,6 +51,7 @@ class TerminalMultiplexer:
             color=next(self.color_cycle),
         )
         self.panes.append(pane)
+        self.total_panes_created += 1
         self.layout_manager.update_layout(self.panes)
 
     def start(self) -> None:
@@ -82,10 +87,52 @@ class TerminalMultiplexer:
                     self._prev_width, self._prev_height = width, height
                     self.layout_manager.update_layout(self.panes)
 
+                # Check for finished processes
+                for pane in self.panes:
+                    if not pane.finished and pane.process and pane.process.poll() is not None:
+                        pane.finished = True
+                        pane.exit_code = pane.process.returncode
+
+                # Check for finished panes
+                self._cleanup_finished_panes()
+
+                # Handle input
+                self._handle_input()
+
                 # ensure layout is up-to-date every frame (safe and cheap)
                 self.layout_manager.update_layout(self.panes)
                 self._render()
                 time.sleep(0.1)  # Refresh rate
+
+    def _handle_input(self) -> None:
+        """
+        Handle keyboard input.
+        """
+        try:
+            key = self.terminal.inkey(timeout=0.01)
+            if key:
+                if key.name == 'KEY_TAB':
+                    self.selected_pane_index = (self.selected_pane_index + 1) % len(self.panes) if self.panes else 0
+                elif self.panes:
+                    self.panes[self.selected_pane_index].send_input(str(key))
+        except:
+            pass  # Ignore input errors
+
+    def _cleanup_finished_panes(self) -> None:
+        """
+        Remove finished panes and update status.
+        """
+        finished_panes = [pane for pane in self.panes if pane.finished]
+        for pane in finished_panes:
+            index = self.panes.index(pane)
+            self.panes.remove(pane)
+            self.last_finished_command = pane.command
+            self.last_exit_code = pane.exit_code
+            pane.stop()  # Ensure stopped
+            if self.selected_pane_index >= len(self.panes) and self.panes:
+                self.selected_pane_index = len(self.panes) - 1
+            elif index <= self.selected_pane_index and self.selected_pane_index > 0:
+                self.selected_pane_index -= 1
 
     def _render(self) -> None:
         """
@@ -93,7 +140,29 @@ class TerminalMultiplexer:
         """
         # Clear screen and render panes
         output = self.terminal.clear()
-        for pane in self.panes:
-            output += pane.render()
+        for i, pane in enumerate(self.panes):
+            output += pane.render(selected=(i == self.selected_pane_index))
+
+        # Render status bar
+        status_line = self._get_status_line()
+        output += self.terminal.move(self.terminal.height - 1, 0) + status_line
+
         # Use print so that terminal control sequences are respected
         print(output, end='')
+
+    def _get_status_line(self) -> str:
+        """
+        Generate the status bar line.
+        """
+        width = self.terminal.width
+        current_panes = len(self.panes)
+        total_created = self.total_panes_created
+        status = f"Panes: {current_panes}/{total_created}"
+        if self.last_finished_command:
+            status += f" | Last: {self.last_finished_command} (exit {self.last_exit_code})"
+        # Truncate if too long
+        if len(status) > width:
+            status = status[:width]
+        else:
+            status = status.ljust(width)
+        return self.terminal.reverse(status)  # Reverse video for status bar

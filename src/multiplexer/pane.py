@@ -22,6 +22,8 @@ class Pane:
         self.running = False
         self.box = box
         self.color = color
+        self.finished = False
+        self.exit_code: Optional[int] = None
 
     def start(self) -> None:
         """
@@ -33,6 +35,7 @@ class Pane:
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
             text=True
         )
         self.thread = threading.Thread(target=self._read_output)
@@ -64,13 +67,25 @@ class Pane:
                 # Keep only the last N lines
                 if len(self.output) > self.height - 2:  # Leave space for border
                     self.output.pop(0)
+            # Check if process has finished
+            if self.process.poll() is not None:
+                self.finished = True
+                self.exit_code = self.process.returncode
+
+    def send_input(self, input_str: str) -> None:
+        """
+        Send input to the pane's process.
+        """
+        if self.process and self.process.stdin and not self.finished:
+            self.process.stdin.write(input_str)
+            self.process.stdin.flush()
 
     def colorize(self, text):
         if self.color:
             return self.color(text)
         return text
 
-    def render(self) -> str:
+    def render(self, selected: bool = False) -> str:
         """
         Render the pane's content.
 
@@ -78,31 +93,35 @@ class Pane:
             The rendered string for this pane.
         """
         content = []
-        
+
         # Prepare title (command) line
         title = f" {self.command} "[: max(0, self.width - 2)]
         title = title.center(max(0, self.width - 2))
 
         # Draw top border with title
-        top = self.colorize(self.box.top_left + self.box.horizontal * (self.width - 2) + self.box.top_right)
+        if selected:
+            border_color = self.terminal.bold_yellow
+        else:
+            border_color = self.colorize
+        top = border_color(self.box.top_left + self.box.horizontal * (self.width - 2) + self.box.top_right)
         content.append(self.terminal.move(self.y, self.x) + top)
-        
+
         # Draw content area
         for i in range(1, self.height - 1):
             line = self.terminal.move(self.y + i, self.x)
             if i == 1:
                 line_content = title
-                line += self.colorize(self.box.vertical) + line_content + self.colorize(self.box.vertical)
+                line += border_color(self.box.vertical) + line_content + border_color(self.box.vertical)
             else:
                 if i - 2 < len(self.output):
                     line_content = self.output[i - 2][:self.width - 2]
-                    line += self.colorize(self.box.vertical) + line_content.ljust(self.width - 2) + self.colorize(self.box.vertical)
+                    line += border_color(self.box.vertical) + line_content.ljust(self.width - 2) + border_color(self.box.vertical)
                 else:
-                    line += self.colorize(self.box.vertical) + ' ' * (self.width - 2) + self.colorize(self.box.vertical)
+                    line += border_color(self.box.vertical) + ' ' * (self.width - 2) + border_color(self.box.vertical)
             content.append(line)
-        
+
         # Draw bottom border
-        bottom = self.colorize(self.box.bottom_left + self.box.horizontal * (self.width - 2) + self.box.bottom_right)
+        bottom = border_color(self.box.bottom_left + self.box.horizontal * (self.width - 2) + self.box.bottom_right)
         content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)
 
         return '\n'.join(content)

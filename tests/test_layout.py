@@ -18,7 +18,7 @@ class TestLayoutManager(unittest.TestCase):
         self.assertEqual(pane.x, 0)
         self.assertEqual(pane.y, 0)
         self.assertEqual(pane.width, 80)
-        self.assertEqual(pane.height, 24)
+        self.assertEqual(pane.height, 23)
 
     def test_two_pane_layout(self):
         pane1 = Pane('echo test1', self.terminal)
@@ -27,11 +27,11 @@ class TestLayoutManager(unittest.TestCase):
         self.assertEqual(pane1.x, 0)
         self.assertEqual(pane1.y, 0)
         self.assertEqual(pane1.width, 40)
-        self.assertEqual(pane1.height, 24)
+        self.assertEqual(pane1.height, 23)
         self.assertEqual(pane2.x, 40)
         self.assertEqual(pane2.y, 0)
         self.assertEqual(pane2.width, 40)
-        self.assertEqual(pane2.height, 24)
+        self.assertEqual(pane2.height, 23)
 
 
 if __name__ == '__main__':
