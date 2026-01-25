@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import threading
 from itertools import cycle
@@ -10,12 +12,12 @@ from .pane import Pane
 
 # Set event loop policy for better performance
 try:
-    import uvloop
+    import uvloop  # type: ignore
 
     uvloop.install()
 except ImportError:
     try:
-        import winuvloop
+        import winuvloop  # type: ignore
 
         winuvloop.install()
     except ImportError:
@@ -49,8 +51,8 @@ class TerminalMultiplexer:
             ],
         )
         self.total_panes_created = 0
-        self.last_finished_command = None
-        self.last_exit_code = None
+        self.last_finished_command: str | None = None
+        self.last_exit_code: int | None = None
         self.selected_pane_index = 0
 
     def run_command(self, command: str) -> None:
@@ -134,9 +136,9 @@ class TerminalMultiplexer:
                         if self.panes
                         else 0
                     )
-                elif key.name == "MOUSE" and key.button == 1:  # Left mouse click
+                elif key.name == "MOUSE" and key.button == 1:  # type: ignore  # Left mouse click
                     # Mouse coordinates are 1-based, pane coordinates are 0-based
-                    mouse_x, mouse_y = key.x - 1, key.y - 1
+                    mouse_x, mouse_y = key.x - 1, key.y - 1  # type: ignore
                     for i, pane in enumerate(self.panes):
                         if (
                             pane.x <= mouse_x < pane.x + pane.width

@@ -1,13 +1,13 @@
 class Box:
     def __init__(
         self,
-        top_left,
-        top_right,
-        bottom_left,
-        bottom_right,
-        horizontal,
-        vertical,
-    ):
+        top_left: str,
+        top_right: str,
+        bottom_left: str,
+        bottom_right: str,
+        horizontal: str,
+        vertical: str,
+    ) -> None:
         self.top_left = top_left
         self.top_right = top_right
         self.bottom_left = bottom_left

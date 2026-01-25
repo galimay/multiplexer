@@ -1,8 +1,10 @@
 import asyncio
+from collections.abc import Callable
 
 from blessed import Terminal
 
 from . import styles
+from .styles import Box
 
 
 class Pane:
@@ -18,9 +20,9 @@ class Pane:
         y: int = 0,
         width: int = 80,
         height: int = 24,
-        box=None,
-        color=None,
-    ):
+        box: Box | None = None,
+        color: Callable[[str], str] | None = None,
+    ) -> None:
         self.command = command
         self.terminal = terminal
         self.x = x
@@ -93,7 +95,7 @@ class Pane:
             self.process.stdin.write(input_str.encode())
             await self.process.stdin.drain()
 
-    def colorize(self, text):
+    def colorize(self, text: str) -> str:
         if self.color:
             return self.color(text)
         return text
@@ -108,22 +110,21 @@ class Pane:
         content = []
 
         # Choose box style based on selection
-        box_style = styles.double if selected else self.box
+        box_style = styles.double if selected else (self.box or styles.rounded)
 
         # Prepare title (command) line
         title = f" {self.command} "[: max(0, self.width - 2)]
         title = title.center(max(0, self.width - 2))
 
         # Draw top border with title
-        if selected:
-            border_color = self.terminal.bold_yellow
-        else:
-            border_color = self.colorize
+        border_color = (
+            self.terminal.bold_yellow if selected else (self.color or (lambda s: s))
+        )
         top = border_color(
             box_style.top_left
             + box_style.horizontal * (self.width - 2)
             + box_style.top_right,
-        )
+        )  # type: ignore
         content.append(self.terminal.move(self.y, self.x) + top)
 
         # Draw content area
@@ -132,20 +133,20 @@ class Pane:
             if i == 1:
                 line_content = title
                 line += (
-                    border_color(box_style.vertical)
+                    border_color(box_style.vertical)  # type: ignore
                     + line_content
                     + border_color(box_style.vertical)
                 )
             elif i - 2 < len(self.output):
                 line_content = self.output[i - 2][: self.width - 2]
                 line += (
-                    border_color(box_style.vertical)
+                    border_color(box_style.vertical)  # type: ignore
                     + line_content.ljust(self.width - 2)
                     + border_color(box_style.vertical)
                 )
             else:
                 line += (
-                    border_color(box_style.vertical)
+                    border_color(box_style.vertical)  # type: ignore
                     + " " * (self.width - 2)
                     + border_color(box_style.vertical)
                 )
@@ -156,7 +157,7 @@ class Pane:
             box_style.bottom_left
             + box_style.horizontal * (self.width - 2)
             + box_style.bottom_right,
-        )
+        )  # type: ignore
         content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)
 
         return "\n".join(content)
