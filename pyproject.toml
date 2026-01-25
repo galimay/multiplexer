@@ -6,7 +6,7 @@ authors = [
     {name = "galimay", email = "galimay@hotmail.com"},
 ]
 dependencies = ["rich>=14.3.0", "blessed>=1.27.0", "click>=8.3.1", "subprocess32>=3.5.4"]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 readme = "README.md"
 license = {text = "MIT"}
 

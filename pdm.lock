@@ -5,10 +5,10 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:7af86a09680e77c2c3aa64932038fed372609f034aea628334a32222c8288247"
+content_hash = "sha256:3ad98d4223aefd134c15ff36e5cc4335724b4777bde12eadcb1458f74608687f"
 
 [[metadata.targets]]
-requires_python = ">=3.11"
+requires_python = ">=3.13"
 
 [[package]]
 name = "ansicon"
@@ -167,7 +167,7 @@ files = [
 
 [[package]]
 name = "rich"
-version = "14.3.0"
+version = "14.3.1"
 requires_python = ">=3.8.0"
 summary = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 groups = ["default"]
@@ -176,8 +176,8 @@ dependencies = [
     "pygments<3.0.0,>=2.13.0",
 ]
 files = [
-    {file = "rich-14.3.0-py3-none-any.whl", hash = "sha256:0b8c1e368c1125b9e993c2d2f1342802525f4853fc6dac2e8e9e88bac0f45bce"},
-    {file = "rich-14.3.0.tar.gz", hash = "sha256:b75e54d3abbcc49137e83e4db54dc86c5e47687eebc95aa0305363231a36e699"},
+    {file = "rich-14.3.1-py3-none-any.whl", hash = "sha256:da750b1aebbff0b372557426fb3f35ba56de8ef954b3190315eb64076d6fb54e"},
+    {file = "rich-14.3.1.tar.gz", hash = "sha256:b8c5f568a3a749f9290ec6bddedf835cec33696bfc1e48bcfecb276c7386e4b8"},
 ]
 
 [[package]]
@@ -192,11 +192,11 @@ files = [
 
 [[package]]
 name = "wcwidth"
-version = "0.3.3"
+version = "0.3.5"
 requires_python = ">=3.8"
 summary = "Measures the displayed width of unicode strings in a terminal"
 groups = ["default"]
 files = [
-    {file = "wcwidth-0.3.3-py3-none-any.whl", hash = "sha256:8e9056c446f21c7393514946d143a748c56aad72476844d3f215f7915276508f"},
-    {file = "wcwidth-0.3.3.tar.gz", hash = "sha256:f8f7d42c8a067d909b80b425342d02c423c5edc546347475e1d402fe3d35bb63"},
+    {file = "wcwidth-0.3.5-py3-none-any.whl", hash = "sha256:b0a0245130566939a24ab8432e625b38272fbc62ecbe5aecbdcb50b8f02ce993"},
+    {file = "wcwidth-0.3.5.tar.gz", hash = "sha256:7c3463f312540cf21ddd527ea34f3ae95c057fa191aa7a9e043898d20d636e59"},
 ]
