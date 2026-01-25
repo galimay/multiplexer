@@ -113,6 +113,14 @@ class TerminalMultiplexer:
             if key:
                 if key.name == 'KEY_TAB':
                     self.selected_pane_index = (self.selected_pane_index + 1) % len(self.panes) if self.panes else 0
+                elif key.name == 'MOUSE' and key.button == 1:  # Left mouse click
+                    # Mouse coordinates are 1-based, pane coordinates are 0-based
+                    mouse_x, mouse_y = key.x - 1, key.y - 1
+                    for i, pane in enumerate(self.panes):
+                        if (pane.x <= mouse_x < pane.x + pane.width and
+                            pane.y <= mouse_y < pane.y + pane.height):
+                            self.selected_pane_index = i
+                            break
                 elif self.panes:
                     self.panes[self.selected_pane_index].send_input(str(key))
         except:
@@ -139,7 +147,7 @@ class TerminalMultiplexer:
         Render all panes to the terminal.
         """
         # Clear screen and render panes
-        output = self.terminal.clear()
+        output = self.terminal.mouse + self.terminal.clear()
         for i, pane in enumerate(self.panes):
             output += pane.render(selected=(i == self.selected_pane_index))
 

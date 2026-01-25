@@ -19,12 +19,12 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     mux = TerminalMultiplexer()
-    mux.box_style = styles.double
 
     # Add some example commands
     mux.run_command('ping -t localhost -n 20')  # Continuous ping
     mux.run_command('python -c "import time; [print(f\'Pane 2: {i}\') or time.sleep(1) for i in range(10)]"')
     mux.run_command('echo "Hello from pane 3" && sleep 5')
+    # mux.run_command('python')
 
     print("Starting multiplexer. Press Ctrl+C to stop.")
     mux.start()

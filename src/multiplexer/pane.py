@@ -2,6 +2,7 @@ import subprocess
 import threading
 from typing import List, Optional
 from blessed import Terminal
+from . import styles
 
 
 class Pane:
@@ -94,6 +95,9 @@ class Pane:
         """
         content = []
 
+        # Choose box style based on selection
+        box_style = styles.double if selected else self.box
+
         # Prepare title (command) line
         title = f" {self.command} "[: max(0, self.width - 2)]
         title = title.center(max(0, self.width - 2))
@@ -103,7 +107,7 @@ class Pane:
             border_color = self.terminal.bold_yellow
         else:
             border_color = self.colorize
-        top = border_color(self.box.top_left + self.box.horizontal * (self.width - 2) + self.box.top_right)
+        top = border_color(box_style.top_left + box_style.horizontal * (self.width - 2) + box_style.top_right)
         content.append(self.terminal.move(self.y, self.x) + top)
 
         # Draw content area
@@ -111,17 +115,17 @@ class Pane:
             line = self.terminal.move(self.y + i, self.x)
             if i == 1:
                 line_content = title
-                line += border_color(self.box.vertical) + line_content + border_color(self.box.vertical)
+                line += border_color(box_style.vertical) + line_content + border_color(box_style.vertical)
             else:
                 if i - 2 < len(self.output):
                     line_content = self.output[i - 2][:self.width - 2]
-                    line += border_color(self.box.vertical) + line_content.ljust(self.width - 2) + border_color(self.box.vertical)
+                    line += border_color(box_style.vertical) + line_content.ljust(self.width - 2) + border_color(box_style.vertical)
                 else:
-                    line += border_color(self.box.vertical) + ' ' * (self.width - 2) + border_color(self.box.vertical)
+                    line += border_color(box_style.vertical) + ' ' * (self.width - 2) + border_color(box_style.vertical)
             content.append(line)
 
         # Draw bottom border
-        bottom = border_color(self.box.bottom_left + self.box.horizontal * (self.width - 2) + self.box.bottom_right)
+        bottom = border_color(box_style.bottom_left + box_style.horizontal * (self.width - 2) + box_style.bottom_right)
         content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)
 
         return '\n'.join(content)
