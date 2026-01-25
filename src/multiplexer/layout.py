@@ -1,6 +1,11 @@
+import math
+
 from blessed import Terminal
 
 from .pane import Pane
+
+MAX_TWO_PANES = 2
+MAX_GRID_PANES = 4
 
 
 class LayoutManager:
@@ -35,7 +40,7 @@ class LayoutManager:
             panes[0].y = 0
             panes[0].width = term_width
             panes[0].height = term_height
-        elif num_panes == 2:
+        elif num_panes == MAX_TWO_PANES:
             # Split vertically
             half_width = term_width // 2
             panes[0].x = 0
@@ -46,7 +51,7 @@ class LayoutManager:
             panes[1].y = 0
             panes[1].width = term_width - half_width
             panes[1].height = term_height
-        elif num_panes <= 4:
+        elif num_panes <= MAX_GRID_PANES:
             # 2x2 grid
             half_width = term_width // 2
             half_height = term_height // 2
@@ -64,13 +69,19 @@ class LayoutManager:
             for i, pane in enumerate(panes):
                 pane.x, pane.y, pane.width, pane.height = positions[i]
         else:
-            # For more panes, implement a more complex layout or stack them
-            # For simplicity, stack vertically
-            pane_height = term_height // num_panes
+            # Grid layout for more than 4 panes
+            rows = math.ceil(math.sqrt(num_panes))
+            columns = math.ceil(num_panes / rows)
+            pane_width = term_width // columns
+            pane_height = term_height // rows
             for i, pane in enumerate(panes):
-                pane.x = 0
-                pane.y = i * pane_height
-                pane.width = term_width
+                row = i // columns
+                col = i % columns
+                pane.x = col * pane_width
+                pane.y = row * pane_height
+                pane.width = (
+                    pane_width if col < columns - 1 else term_width - col * pane_width
+                )
                 pane.height = (
-                    pane_height if i < num_panes - 1 else term_height - i * pane_height
+                    pane_height if row < rows - 1 else term_height - row * pane_height
                 )
