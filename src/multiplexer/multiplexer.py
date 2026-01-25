@@ -1,20 +1,22 @@
 import asyncio
 import threading
-import time
-from typing import List, Optional
-from blessed import Terminal
 from itertools import cycle
-from .pane import Pane
-from .layout import LayoutManager
+
+from blessed import Terminal
+
 from . import styles
+from .layout import LayoutManager
+from .pane import Pane
 
 # Set event loop policy for better performance
 try:
     import uvloop
+
     uvloop.install()
 except ImportError:
     try:
         import winuvloop
+
         winuvloop.install()
     except ImportError:
         pass  # Use default asyncio event loop
@@ -27,23 +29,25 @@ class TerminalMultiplexer:
     Manages multiple panes, each running a command, and handles the layout.
     """
 
-    def __init__(self, terminal: Optional[Terminal] = None):
+    def __init__(self, terminal: Terminal | None = None):
         self.terminal = terminal or Terminal()
-        self.panes: List[Pane] = []
+        self.panes: list[Pane] = []
         self.layout_manager = LayoutManager(self.terminal)
         self.running = False
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         # track terminal size to detect resize events
-        self._prev_width = getattr(self.terminal, 'width', 0)
-        self._prev_height = getattr(self.terminal, 'height', 0)
+        self._prev_width = getattr(self.terminal, "width", 0)
+        self._prev_height = getattr(self.terminal, "height", 0)
         self.box_style = styles.rounded
-        self.color_cycle = cycle([
-            self.terminal.red,
-            self.terminal.green,
-            self.terminal.blue,
-            self.terminal.magenta,
-            self.terminal.cyan,
-        ])
+        self.color_cycle = cycle(
+            [
+                self.terminal.red,
+                self.terminal.green,
+                self.terminal.blue,
+                self.terminal.magenta,
+                self.terminal.cyan,
+            ],
+        )
         self.total_panes_created = 0
         self.last_finished_command = None
         self.last_exit_code = None
@@ -90,15 +94,19 @@ class TerminalMultiplexer:
         with self.terminal.fullscreen(), self.terminal.cbreak():
             while self.running:
                 # detect terminal resize and update layout if changed
-                width = getattr(self.terminal, 'width', self._prev_width)
-                height = getattr(self.terminal, 'height', self._prev_height)
+                width = getattr(self.terminal, "width", self._prev_width)
+                height = getattr(self.terminal, "height", self._prev_height)
                 if width != self._prev_width or height != self._prev_height:
                     self._prev_width, self._prev_height = width, height
                     self.layout_manager.update_layout(self.panes)
 
                 # Check for finished processes
                 for pane in self.panes:
-                    if not pane.finished and pane.process and pane.process.returncode is not None:
+                    if (
+                        not pane.finished
+                        and pane.process
+                        and pane.process.returncode is not None
+                    ):
                         pane.finished = True
                         pane.exit_code = pane.process.returncode
 
@@ -120,14 +128,20 @@ class TerminalMultiplexer:
         try:
             key = self.terminal.inkey(timeout=0.01)
             if key:
-                if key.name == 'KEY_TAB':
-                    self.selected_pane_index = (self.selected_pane_index + 1) % len(self.panes) if self.panes else 0
-                elif key.name == 'MOUSE' and key.button == 1:  # Left mouse click
+                if key.name == "KEY_TAB":
+                    self.selected_pane_index = (
+                        (self.selected_pane_index + 1) % len(self.panes)
+                        if self.panes
+                        else 0
+                    )
+                elif key.name == "MOUSE" and key.button == 1:  # Left mouse click
                     # Mouse coordinates are 1-based, pane coordinates are 0-based
                     mouse_x, mouse_y = key.x - 1, key.y - 1
                     for i, pane in enumerate(self.panes):
-                        if (pane.x <= mouse_x < pane.x + pane.width and
-                            pane.y <= mouse_y < pane.y + pane.height):
+                        if (
+                            pane.x <= mouse_x < pane.x + pane.width
+                            and pane.y <= mouse_y < pane.y + pane.height
+                        ):
                             self.selected_pane_index = i
                             break
                 elif self.panes:
@@ -177,7 +191,9 @@ class TerminalMultiplexer:
         total_created = self.total_panes_created
         status = f"Panes: {current_panes}/{total_created}"
         if self.last_finished_command:
-            status += f" | Last: {self.last_finished_command} (exit {self.last_exit_code})"
+            status += (
+                f" | Last: {self.last_finished_command} (exit {self.last_exit_code})"
+            )
         # Truncate if too long
         if len(status) > width:
             status = status[:width]

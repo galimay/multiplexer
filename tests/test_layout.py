@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import Mock
+
 from multiplexer.layout import LayoutManager
 from multiplexer.pane import Pane
 
@@ -13,7 +14,7 @@ class TestLayoutManager(unittest.TestCase):
         self.layout_manager = LayoutManager(self.terminal)
 
     def test_single_pane_layout(self):
-        pane = Pane('echo test', self.terminal)
+        pane = Pane("echo test", self.terminal)
         self.layout_manager.update_layout([pane])
         self.assertEqual(pane.x, 0)
         self.assertEqual(pane.y, 0)
@@ -21,8 +22,8 @@ class TestLayoutManager(unittest.TestCase):
         self.assertEqual(pane.height, 23)
 
     def test_two_pane_layout(self):
-        pane1 = Pane('echo test1', self.terminal)
-        pane2 = Pane('echo test2', self.terminal)
+        pane1 = Pane("echo test1", self.terminal)
+        pane2 = Pane("echo test2", self.terminal)
         self.layout_manager.update_layout([pane1, pane2])
         self.assertEqual(pane1.x, 0)
         self.assertEqual(pane1.y, 0)
@@ -34,5 +35,5 @@ class TestLayoutManager(unittest.TestCase):
         self.assertEqual(pane2.height, 23)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
