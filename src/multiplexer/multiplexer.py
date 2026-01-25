@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import time
 from typing import List, Optional
@@ -6,6 +7,17 @@ from itertools import cycle
 from .pane import Pane
 from .layout import LayoutManager
 from . import styles
+
+# Set event loop policy for better performance
+try:
+    import uvloop
+    uvloop.install()
+except ImportError:
+    try:
+        import winuvloop
+        winuvloop.install()
+    except ImportError:
+        pass  # Use default asyncio event loop
 
 
 class TerminalMultiplexer:
@@ -54,27 +66,24 @@ class TerminalMultiplexer:
         self.total_panes_created += 1
         self.layout_manager.update_layout(self.panes)
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """
         Start the multiplexer, displaying all panes.
         """
         self.running = True
-        for pane in self.panes:
-            pane.start()
-        self.thread = threading.Thread(target=self._render_loop)
-        self.thread.start()
+        # Start all panes asynchronously
+        await asyncio.gather(*[pane.start() for pane in self.panes])
+        # Run the render loop
+        await self._render_loop()
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """
         Stop the multiplexer and all panes.
         """
         self.running = False
-        for pane in self.panes:
-            pane.stop()
-        if self.thread:
-            self.thread.join()
+        await asyncio.gather(*[pane.stop() for pane in self.panes])
 
-    def _render_loop(self) -> None:
+    async def _render_loop(self) -> None:
         """
         Main render loop to update the display.
         """
@@ -89,22 +98,22 @@ class TerminalMultiplexer:
 
                 # Check for finished processes
                 for pane in self.panes:
-                    if not pane.finished and pane.process and pane.process.poll() is not None:
+                    if not pane.finished and pane.process and pane.process.returncode is not None:
                         pane.finished = True
                         pane.exit_code = pane.process.returncode
 
                 # Check for finished panes
-                self._cleanup_finished_panes()
+                await self._cleanup_finished_panes()
 
                 # Handle input
-                self._handle_input()
+                await self._handle_input()
 
                 # ensure layout is up-to-date every frame (safe and cheap)
                 self.layout_manager.update_layout(self.panes)
                 self._render()
-                time.sleep(0.1)  # Refresh rate
+                await asyncio.sleep(0.1)  # Refresh rate
 
-    def _handle_input(self) -> None:
+    async def _handle_input(self) -> None:
         """
         Handle keyboard input.
         """
@@ -122,11 +131,11 @@ class TerminalMultiplexer:
                             self.selected_pane_index = i
                             break
                 elif self.panes:
-                    self.panes[self.selected_pane_index].send_input(str(key))
+                    await self.panes[self.selected_pane_index].send_input(str(key))
         except:
             pass  # Ignore input errors
 
-    def _cleanup_finished_panes(self) -> None:
+    async def _cleanup_finished_panes(self) -> None:
         """
         Remove finished panes and update status.
         """
@@ -136,7 +145,7 @@ class TerminalMultiplexer:
             self.panes.remove(pane)
             self.last_finished_command = pane.command
             self.last_exit_code = pane.exit_code
-            pane.stop()  # Ensure stopped
+            await pane.stop()  # Ensure stopped
             if self.selected_pane_index >= len(self.panes) and self.panes:
                 self.selected_pane_index = len(self.panes) - 1
             elif index <= self.selected_pane_index and self.selected_pane_index > 0:
@@ -156,7 +165,8 @@ class TerminalMultiplexer:
         output += self.terminal.move(self.terminal.height - 1, 0) + status_line
 
         # Use print so that terminal control sequences are respected
-        print(output, end='')
+        self.terminal.stream.write(output)
+        self.terminal.stream.flush()
 
     def _get_status_line(self) -> str:
         """

@@ -1,5 +1,5 @@
+import asyncio
 import subprocess
-import threading
 from typing import List, Optional
 from blessed import Terminal
 from . import styles
@@ -17,69 +17,71 @@ class Pane:
         self.y = y
         self.width = width
         self.height = height
-        self.process: Optional[subprocess.Popen] = None
+        self.process: Optional[asyncio.subprocess.Process] = None
         self.output: List[str] = []
-        self.thread: Optional[threading.Thread] = None
+        self.task: Optional[asyncio.Task] = None
         self.running = False
         self.box = box
         self.color = color
         self.finished = False
         self.exit_code: Optional[int] = None
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """
         Start the command in this pane.
         """
         self.running = True
-        self.process = subprocess.Popen(
+        self.process = await asyncio.create_subprocess_shell(
             self.command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE,
-            text=True
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            stdin=asyncio.subprocess.PIPE,
         )
-        self.thread = threading.Thread(target=self._read_output)
-        self.thread.start()
+        self.task = asyncio.create_task(self._read_output())
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """
         Stop the command in this pane.
         """
         self.running = False
-        if self.process:
+        if self.process and self.process.returncode is None:
             self.process.terminate()
             try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
+                await asyncio.wait_for(self.process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
                 self.process.kill()
-        if self.thread:
-            self.thread.join()
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
 
-    def _read_output(self) -> None:
+    async def _read_output(self) -> None:
         """
         Read output from the subprocess and store it.
         """
         if self.process and self.process.stdout:
-            for line in iter(self.process.stdout.readline, ''):
-                if not self.running:
+            while self.running:
+                line = await self.process.stdout.readline()
+                if not line:
                     break
-                self.output.append(line.rstrip())
+                self.output.append(line.decode('utf-8', errors='ignore').rstrip())
                 # Keep only the last N lines
                 if len(self.output) > self.height - 2:  # Leave space for border
                     self.output.pop(0)
             # Check if process has finished
-            if self.process.poll() is not None:
+            if self.process.returncode is not None:
                 self.finished = True
                 self.exit_code = self.process.returncode
 
-    def send_input(self, input_str: str) -> None:
+    async def send_input(self, input_str: str) -> None:
         """
         Send input to the pane's process.
         """
         if self.process and self.process.stdin and not self.finished:
-            self.process.stdin.write(input_str)
-            self.process.stdin.flush()
+            self.process.stdin.write(input_str.encode())
+            await self.process.stdin.drain()
 
     def colorize(self, text):
         if self.color:
