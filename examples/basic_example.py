@@ -15,13 +15,6 @@ async def main():
 
     # Add some example commands
     mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
-    mux.run_command('ping localhost -n 10')
     mux.run_command('echo "Hello from pane 2" && sleep 2 && echo "Goodbye from pane 2"')
     mux.run_command('ls -la && sleep 2 && echo "Finished listing"')
     mux.run_command('python -u -c "import time; [print(i) or time.sleep(1) for i in range(5)]"')
