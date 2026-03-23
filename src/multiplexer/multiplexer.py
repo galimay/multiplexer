@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import threading
+import contextlib
 from itertools import cycle
+from typing import TYPE_CHECKING, Any, cast
 
 from blessed import Terminal
 
@@ -10,18 +11,24 @@ from . import styles
 from .layout import LayoutManager
 from .pane import Pane
 
+if TYPE_CHECKING:
+    import threading
+
 # Set event loop policy for better performance
 try:
-    import uvloop  # type: ignore
+    import uvloop
 
     uvloop.install()
 except ImportError:
     try:
-        import winuvloop  # type: ignore
+        import winuvloop
 
         winuvloop.install()
     except ImportError:
         pass  # Use default asyncio event loop
+
+_PANE_LABEL_MAX_LEN = 16
+_CMD_INFO_MAX_LEN = 12
 
 
 class TerminalMultiplexer:
@@ -101,6 +108,11 @@ class TerminalMultiplexer:
                 if width != self._prev_width or height != self._prev_height:
                     self._prev_width, self._prev_height = width, height
                     self.layout_manager.update_layout(self.panes)
+                    # Trim each pane's output buffer to the new content height
+                    for pane in self.panes:
+                        ch = max(1, pane.height - 3)
+                        while len(pane.output) > ch:
+                            pane.output.pop(0)
 
                 # Check for finished processes
                 for pane in self.panes:
@@ -126,8 +138,13 @@ class TerminalMultiplexer:
     async def _handle_input(self) -> None:
         """
         Handle keyboard input.
+
+        Printable characters are buffered in the selected pane's prompt bar.
+        Enter commits the buffer to the process; Backspace edits it; Escape
+        clears it.  Ctrl+C / Ctrl+D are forwarded directly to the process.
+        Tab cycles focus between panes.
         """
-        try:
+        with contextlib.suppress(Exception):
             key = self.terminal.inkey(timeout=0.01)
             if key:
                 if key.name == "KEY_TAB":
@@ -136,20 +153,35 @@ class TerminalMultiplexer:
                         if self.panes
                         else 0
                     )
-                elif key.name == "MOUSE" and key.button == 1:  # type: ignore  # Left mouse click
-                    # Mouse coordinates are 1-based, pane coordinates are 0-based
-                    mouse_x, mouse_y = key.x - 1, key.y - 1  # type: ignore
-                    for i, pane in enumerate(self.panes):
-                        if (
-                            pane.x <= mouse_x < pane.x + pane.width
-                            and pane.y <= mouse_y < pane.y + pane.height
-                        ):
-                            self.selected_pane_index = i
-                            break
+                elif key.name == "MOUSE":
+                    key_any = cast("Any", key)
+                    if key_any.button == 1:  # left click
+                        mouse_x, mouse_y = key_any.x - 1, key_any.y - 1
+                        for i, pane in enumerate(self.panes):
+                            if (
+                                pane.x <= mouse_x < pane.x + pane.width
+                                and pane.y <= mouse_y < pane.y + pane.height
+                            ):
+                                self.selected_pane_index = i
+                                break
                 elif self.panes:
-                    await self.panes[self.selected_pane_index].send_input(str(key))
-        except:
-            pass  # Ignore input errors
+                    await self._process_pane_key_input(key)
+
+    async def _process_pane_key_input(self, key: Any) -> None:
+        """Route a keystroke to the selected pane's prompt buffer or process."""
+        selected = self.panes[self.selected_pane_index]
+        key_str = str(key)
+        if key.name in ("KEY_ENTER",) or key_str in ("\n", "\r"):
+            await selected.send_input(selected.input_buffer + "\n")
+            selected.input_buffer = ""
+        elif key.name in ("KEY_BACKSPACE", "KEY_DELETE") or key_str == "\x7f":
+            selected.input_buffer = selected.input_buffer[:-1]
+        elif key.name == "KEY_ESCAPE" or key_str == "\x1b":
+            selected.input_buffer = ""
+        elif key_str in ("\x03", "\x04"):  # Ctrl+C / Ctrl+D — send directly
+            await selected.send_input(key_str)
+        elif not key.is_sequence and len(key_str) == 1:
+            selected.input_buffer += key_str
 
     async def _cleanup_finished_panes(self) -> None:
         """
@@ -178,7 +210,7 @@ class TerminalMultiplexer:
 
         # Render status bar
         status_line = self._get_status_line()
-        output += self.terminal.move(self.terminal.height - 1, 0) + status_line
+        output += self.terminal.move(self.terminal.height - 1, 0) + status_line  # type: ignore[arg-type]
 
         # Use print so that terminal control sequences are respected
         self.terminal.stream.write(output)
@@ -189,16 +221,34 @@ class TerminalMultiplexer:
         Generate the status bar line.
         """
         width = self.terminal.width
-        current_panes = len(self.panes)
-        total_created = self.total_panes_created
-        status = f"Panes: {current_panes}/{total_created}"
-        if self.last_finished_command:
-            status += (
-                f" | Last: {self.last_finished_command} (exit {self.last_exit_code})"
+
+        # Pane list with selection indicator
+        pane_parts: list[str] = []
+        for i, pane in enumerate(self.panes):
+            marker = "●" if i == self.selected_pane_index else "○"
+            label = (
+                pane.command
+                if len(pane.command) <= _PANE_LABEL_MAX_LEN
+                else pane.command[: _PANE_LABEL_MAX_LEN - 3] + "…"
             )
-        # Truncate if too long
-        if len(status) > width:
-            status = status[:width]
+            pane_parts.append(f" {marker} {label}")
+        panes_str = "  ".join(pane_parts)
+
+        # Last finished command info
+        if self.last_finished_command:
+            cmd = self.last_finished_command
+            if len(cmd) > _CMD_INFO_MAX_LEN:
+                cmd = cmd[: _CMD_INFO_MAX_LEN - 3] + "…"
+            last_str = f" │ ✓ {cmd} [{self.last_exit_code}]"
         else:
-            status = status.ljust(width)
-        return self.terminal.reverse(status)  # Reverse video for status bar
+            last_str = ""
+
+        hints = "  TAB:▶next  ENTER:send  ESC:clear  "
+
+        left = panes_str + last_str
+        # Right-align hints, fill gap with spaces
+        gap = width - len(left) - len(hints)
+        status = left + " " * gap + hints if gap >= 1 else (left + " " + hints)[:width]
+
+        status = status[:width].ljust(width)
+        return self.terminal.reverse(status)

@@ -33,8 +33,8 @@ class LayoutManager:
         )
 
         num_panes = len(panes)
-        rows = math.ceil(math.sqrt(num_panes))
-        columns = math.ceil(num_panes / rows)
+        columns = math.ceil(math.sqrt(num_panes))
+        rows = math.ceil(num_panes / columns)
         pane_width = term_width // columns
         pane_height = term_height // rows
         for i, pane in enumerate(panes):

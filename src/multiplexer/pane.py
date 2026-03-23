@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import os
 from collections.abc import Callable
 
 from blessed import Terminal
@@ -12,7 +14,7 @@ class Pane:
     Represents a single pane running a command.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         command: str,
         terminal: Terminal,
@@ -37,17 +39,33 @@ class Pane:
         self.color = color
         self.finished = False
         self.exit_code: int | None = None
+        self.input_buffer: str = ""
+
+    @property
+    def content_width(self) -> int:
+        """Usable columns inside the border."""
+        return max(0, self.width - 2)
+
+    @property
+    def content_height(self) -> int:
+        """Usable rows inside the border (excludes title row on border + prompt row)."""
+        return max(0, self.height - 3)
 
     async def start(self) -> None:
         """
         Start the command in this pane.
         """
         self.running = True
+        env = os.environ.copy()
+        env["COLUMNS"] = str(max(1, self.content_width))
+        env["LINES"] = str(max(1, self.content_height))
+        env.setdefault("TERM", "xterm-256color")
         self.process = await asyncio.create_subprocess_shell(
             self.command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             stdin=asyncio.subprocess.PIPE,
+            env=env,
         )
         self.task = asyncio.create_task(self._read_output())
 
@@ -64,10 +82,8 @@ class Pane:
                 self.process.kill()
         if self.task and not self.task.done():
             self.task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self.task
-            except asyncio.CancelledError:
-                pass
 
     async def _read_output(self) -> None:
         """
@@ -79,8 +95,9 @@ class Pane:
                 if not line:
                     break
                 self.output.append(line.decode("utf-8", errors="ignore").rstrip())
-                # Keep only the last N lines
-                if len(self.output) > self.height - 2:  # Leave space for border
+                # Keep only lines that fit the content area
+                max_lines = max(1, self.height - 3)
+                while len(self.output) > max_lines:
                     self.output.pop(0)
             # Check if process has finished
             if self.process.returncode is not None:
@@ -100,64 +117,95 @@ class Pane:
             return self.color(text)
         return text
 
-    def render(self, selected: bool = False) -> str:
+    def _render_prompt(self, *, selected: bool, width: int) -> str:
+        """Render the prompt bar content, padded/truncated to *width* columns."""
+        raw = styles.PROMPT_PREFIX + (self.input_buffer + "█" if selected else "")
+        return raw[:width].ljust(width)
+
+    def render(self, *, selected: bool = False) -> str:
         """
         Render the pane's content.
+
+        Layout (top→bottom):
+          row 0            : top border with title embedded
+          rows 1..height-3 : process output lines
+          row height-2     : prompt bar
+          row height-1     : bottom border
 
         Returns:
             The rendered string for this pane.
         """
-        content = []
+        if self.width < 2 or self.height < 2:  # noqa: PLR2004
+            return ""
+
+        content: list[str] = []
 
         # Choose box style based on selection
         box_style = styles.double if selected else (self.box or styles.rounded)
 
-        # Prepare title (command) line
-        title = f" {self.command} "[: max(0, self.width - 2)]
-        title = title.center(max(0, self.width - 2))
-
-        # Draw top border with title
-        border_color = (
+        # Border colour: bold yellow for selected pane, pane colour otherwise
+        border_color: Callable[[str], str] = (
             self.terminal.bold_yellow if selected else (self.color or (lambda s: s))
         )
+
+        # --- Top border with title embedded ---
+        title_text = f" {self.command} "
+        inner_width = self.width - 2
+        max_title = max(0, inner_width - 2)
+        title_text = title_text[:max_title]
+        dashes_total = inner_width - len(title_text)
+        left_dashes = dashes_total // 2
+        right_dashes = dashes_total - left_dashes
         top = border_color(
             box_style.top_left
-            + box_style.horizontal * (self.width - 2)
+            + box_style.horizontal * left_dashes
+            + title_text
+            + box_style.horizontal * right_dashes
             + box_style.top_right,
-        )  # type: ignore
-        content.append(self.terminal.move(self.y, self.x) + top)
+        )
+        content.append(self.terminal.move(self.y, self.x) + top)  # type: ignore[arg-type]
 
-        # Draw content area
+        # --- Content rows + prompt bar ---
+        content_rows = max(0, self.height - 3)
         for i in range(1, self.height - 1):
-            line = self.terminal.move(self.y + i, self.x)
-            if i == 1:
-                line_content = title
-                line += (
-                    border_color(box_style.vertical)  # type: ignore
-                    + line_content
-                    + border_color(box_style.vertical)
+            line = self.terminal.move(self.y + i, self.x)  # type: ignore[arg-type]
+            if i <= content_rows:
+                # Process output line
+                output_idx = i - 1
+                line_content = (
+                    self.output[output_idx][: self.width - 2]
+                    if output_idx < len(self.output)
+                    else ""
                 )
-            elif i - 2 < len(self.output):
-                line_content = self.output[i - 2][: self.width - 2]
                 line += (
-                    border_color(box_style.vertical)  # type: ignore
+                    border_color(box_style.vertical)
                     + line_content.ljust(self.width - 2)
                     + border_color(box_style.vertical)
                 )
             else:
+                # Prompt bar (row height-2)
+                prompt = self._render_prompt(selected=selected, width=self.width - 2)
+                # Use string concatenation for styling — avoids calling ParameterizingString
+                # (e.g. `dim`) with a string arg, which fails on some Windows terminals.
+                if selected:
+                    styled_prompt = (
+                        str(self.terminal.bold) + prompt + str(self.terminal.normal)
+                    )
+                else:
+                    styled_prompt = prompt
                 line += (
-                    border_color(box_style.vertical)  # type: ignore
-                    + " " * (self.width - 2)
+                    border_color(box_style.vertical)
+                    + styled_prompt
                     + border_color(box_style.vertical)
                 )
             content.append(line)
 
-        # Draw bottom border
+        # --- Bottom border ---
         bottom = border_color(
             box_style.bottom_left
             + box_style.horizontal * (self.width - 2)
             + box_style.bottom_right,
-        )  # type: ignore
-        content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)
+        )
+        content.append(self.terminal.move(self.y + self.height - 1, self.x) + bottom)  # type: ignore[arg-type]
 
         return "\n".join(content)
